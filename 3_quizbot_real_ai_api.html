@@ -144,6 +144,7 @@ const progressTrack = document.querySelector('.progress-track');
 const progressFill = document.getElementById('progressFill');
 let aiAvailable = false;
 let requestingQuestions = false;
+let historyShown = false;
 let state = {};
 
 function updateProgress(complete = false){
@@ -257,6 +258,7 @@ async function init(){
 
 function start(){
   requestingQuestions = false;
+  historyShown = false;
   state = {};
   quizProgress.hidden = true;
   setTopicControlsDisabled(false);
@@ -295,6 +297,10 @@ function start(){
 }
 
 function showHistory(){
+  if(historyShown) return;
+  historyShown = true;
+  const historyButton = document.getElementById('histBtn');
+  if(historyButton) historyButton.remove();
   const h = getHistory();
   let lines = Object.keys(h).map(t=>{
     const arr=h[t]; const last=arr[arr.length-1];
