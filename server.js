@@ -2,7 +2,6 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const {askGemini, parseQuestions} = require('./lib/gemini');
-const {checkRateLimit} = require('./lib/rate-limit');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PAGE_PATH = path.join(__dirname, '3_quizbot_real_ai_api.html');
@@ -76,13 +75,6 @@ async function handleApi(request, response, pathname){
     ){
       throw invalidRequest('Pilih topik, jumlah soal 5/10/15, dan tingkat kesulitan yang tersedia.');
     }
-    const limit = await checkRateLimit(request, count / 5);
-    if(!limit.allowed){
-      sendJson(response, 429, {
-        error:`Batas penggunaan tercapai. Coba lagi dalam ${Math.ceil(limit.retryAfter / 60)} menit.`
-      }, {'Retry-After':String(limit.retryAfter)});
-      return;
-    }
     const content = await askGemini(
       `Kamu adalah pembuat soal kuis berbahasa Indonesia. Hasilkan tepat ${count} soal pilihan ganda tingkat mahasiswa dengan tingkat kesulitan ${difficulty.toLowerCase()}. Setiap soal hanya memiliki satu jawaban benar dan tepat 4 opsi.`,
       `Buat soal tentang topik berikut: ${body.topic.trim()}. Tingkat kesulitan: ${difficulty}. Balas sebagai objek JSON dengan format {"questions":[{"q":"pertanyaan","opts":["opsi1","opsi2","opsi3","opsi4"],"a":0,"explain":"penjelasan singkat"}]}. Hasilkan tepat ${count} soal. Nilai a adalah indeks jawaban benar, mulai dari 0.`,
@@ -102,13 +94,6 @@ async function handleApi(request, response, pathname){
       body.score > body.total
     ){
       throw invalidRequest('Data hasil kuis tidak valid.');
-    }
-    const limit = await checkRateLimit(request);
-    if(!limit.allowed){
-      sendJson(response, 429, {
-        error:`Batas penggunaan AI tercapai. Coba lagi dalam ${Math.ceil(limit.retryAfter / 60)} menit.`
-      }, {'Retry-After':String(limit.retryAfter)});
-      return;
     }
     const tip = await askGemini(
       'Berikan satu tips belajar yang singkat, maksimal dua kalimat, dalam bahasa Indonesia dengan nada suportif.',
