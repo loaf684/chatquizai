@@ -1,7 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const {askGemini, validateQuestions} = require('./lib/gemini');
+const {askGemini, parseQuestions} = require('./lib/gemini');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PAGE_PATH = path.join(__dirname, '3_quizbot_real_ai_api.html');
@@ -72,13 +72,7 @@ async function handleApi(request, response, pathname){
       `Buat soal tentang topik berikut: ${body.topic.trim()}. Variasikan tingkat kesulitan. Balas sebagai objek JSON dengan format {"questions":[{"q":"pertanyaan","opts":["opsi1","opsi2","opsi3","opsi4"],"a":0,"explain":"penjelasan singkat"}]}. Nilai a adalah indeks jawaban benar, mulai dari 0.`,
       true
     );
-    let parsed;
-    try{
-      parsed = JSON.parse(content);
-    }catch{
-      throw new Error('Gemini mengembalikan JSON yang tidak valid.');
-    }
-    sendJson(response, 200, {questions:validateQuestions(parsed)});
+    sendJson(response, 200, {questions:parseQuestions(content)});
     return;
   }
   if(pathname === '/api/tip'){

@@ -1,4 +1,4 @@
-const {askGemini, validateQuestions, sendError} = require('../lib/gemini');
+const {askGemini, parseQuestions, sendError} = require('../lib/gemini');
 
 module.exports = async (request, response)=>{
   if(request.method !== 'POST'){
@@ -18,13 +18,7 @@ module.exports = async (request, response)=>{
       `Buat soal tentang topik berikut: ${topic.trim()}. Variasikan tingkat kesulitan. Balas sebagai objek JSON dengan format {"questions":[{"q":"pertanyaan","opts":["opsi1","opsi2","opsi3","opsi4"],"a":0,"explain":"penjelasan singkat"}]}. Nilai a adalah indeks jawaban benar, mulai dari 0.`,
       true
     );
-    let parsed;
-    try{
-      parsed = JSON.parse(content);
-    }catch{
-      throw new Error('Gemini mengembalikan JSON yang tidak valid.');
-    }
-    response.status(200).json({questions:validateQuestions(parsed)});
+    response.status(200).json({questions:parseQuestions(content)});
   }catch(error){
     sendError(response, error);
   }
