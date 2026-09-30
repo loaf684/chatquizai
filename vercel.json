@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/3_quizbot_real_ai_api.html"
+    }
+  ]
+}

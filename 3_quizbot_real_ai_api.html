@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QuizBot AI — Chatbot Latihan Soal</title>
+<style>
+  :root{
+    --bg:#0F1414; --panel:#171E1D; --bubble-bot:#1F2826; --bubble-user:#274038;
+    --ink:#EDEFEA; --muted:#8FA39B; --accent:#5CC8A6; --wrong:#D9695F; --line:#2A332F;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%; margin:0;}
+  body{
+    background:var(--bg); color:var(--ink); font-family:Georgia,'Iowan Old Style',serif;
+    display:flex; justify-content:center; padding:20px;
+  }
+  .app{ width:100%; max-width:520px; display:flex; flex-direction:column; height:100%; max-height:820px; }
+  header{ padding:0 4px 14px; border-bottom:1px solid var(--line); margin-bottom:14px; display:flex; justify-content:space-between; align-items:baseline; }
+  header h1{ font-size:1.3rem; font-weight:400; margin:0 0 2px; }
+  header p{ font-family:Arial,sans-serif; color:var(--muted); font-size:.78rem; margin:0; }
+  .badge{ font-family:Arial,sans-serif; font-size:.68rem; color:var(--accent); border:1px solid var(--accent); padding:2px 8px; border-radius:10px; white-space:nowrap; }
+  .chat{ flex:1; overflow-y:auto; padding:4px 2px; display:flex; flex-direction:column; gap:10px; }
+  .row{ display:flex; }
+  .row.bot{ justify-content:flex-start; }
+  .row.user{ justify-content:flex-end; }
+  .bubble{ max-width:84%; padding:11px 14px; border-radius:12px; font-size:.95rem; line-height:1.45; font-family:Arial,sans-serif; }
+  .bot .bubble{ background:var(--bubble-bot); border-top-left-radius:3px; }
+  .user .bubble{ background:var(--bubble-user); border-top-right-radius:3px; }
+  .opts{ display:flex; flex-direction:column; gap:8px; margin-top:2px; }
+  .opt{
+    font-family:Arial,sans-serif; text-align:left; background:transparent; color:var(--ink);
+    border:1px solid var(--line); padding:10px 13px; border-radius:8px; cursor:pointer; font-size:.9rem;
+  }
+  .opt:hover{ border-color:var(--accent); }
+  .opt:disabled{ cursor:default; }
+  .opt.correct{ border-color:var(--accent); background:rgba(92,200,166,.12); }
+  .opt.wrong{ border-color:var(--wrong); background:rgba(217,105,95,.12); }
+  .topic-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:2px; }
+  .topic-btn{
+    font-family:Arial,sans-serif; background:transparent; color:var(--ink); border:1px solid var(--line);
+    padding:12px 10px; border-radius:8px; cursor:pointer; font-size:.85rem; text-align:left;
+  }
+  .topic-btn:hover{ border-color:var(--accent); }
+  .custom-row{ display:flex; gap:8px; margin-top:10px; }
+  .custom-row input{
+    flex:1; font-family:Arial,sans-serif; background:transparent; border:1px solid var(--line); color:var(--ink);
+    padding:9px 11px; border-radius:8px; font-size:.85rem;
+  }
+  .stat-line{ font-family:Arial,sans-serif; font-size:.8rem; color:var(--muted); margin-top:2px; }
+  .typing{ font-family:Arial,sans-serif; color:var(--muted); font-size:.85rem; font-style:italic; }
+  footer{ padding-top:10px; }
+  .action-btn{
+    font-family:Arial,sans-serif; background:var(--accent); color:#0F1414; border:none;
+    padding:10px 16px; border-radius:8px; cursor:pointer; font-size:.85rem; font-weight:600; margin-right:8px;
+  }
+  .action-btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+  ::-webkit-scrollbar{ width:6px; }
+  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div><h1>QuizBot AI</h1><p>Soal dibuat langsung oleh AI, real-time</p></div>
+    <span class="badge" id="badge">menghubungkan…</span>
+  </header>
+  <div class="chat" id="chat"></div>
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const TOPICS = ["Struktur Data","Kecerdasan Buatan","Basis Data","Jaringan Komputer"];
+const chat = document.getElementById('chat');
+const footer = document.getElementById('footer');
+const badge = document.getElementById('badge');
+let aiAvailable = false;
+let state = {};
+
+function escapeHtml(value){
+  return String(value).replace(/[&<>"']/g, char=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[char]);
+}
+
+async function apiRequest(path, payload){
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if(!response.ok) throw new Error(result.error || 'Permintaan ke AI gagal.');
+  return result;
+}
+
+function addBot(html){
+  const row = document.createElement('div');
+  row.className = 'row bot';
+  row.innerHTML = `<div class="bubble">${html}</div>`;
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+  return row.querySelector('.bubble');
+}
+function addUser(text){
+  const row = document.createElement('div');
+  row.className = 'row user';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  row.appendChild(bubble);
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+}
+function addTyping(label){
+  const row = document.createElement('div');
+  row.className = 'row bot';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble typing';
+  bubble.textContent = label;
+  row.appendChild(bubble);
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+  return row;
+}
+
+function getHistory(){
+  try{ return JSON.parse(localStorage.getItem('quizbot_history')||'{}'); }catch(e){ return {}; }
+}
+function saveHistory(topic, score, total){
+  try{
+    const h = getHistory();
+    if(!h[topic]) h[topic] = [];
+    h[topic].push({score, total, t: Date.now()});
+    localStorage.setItem('quizbot_history', JSON.stringify(h));
+  }catch(e){}
+}
+function weakestTopic(){
+  const h = getHistory();
+  let worst=null, worstPct=1.01;
+  Object.keys(h).forEach(t=>{
+    const arr=h[t]; const s=arr.reduce((a,b)=>a+b.score,0); const tt=arr.reduce((a,b)=>a+b.total,0);
+    const pct = tt? s/tt : 1;
+    if(pct<worstPct){ worstPct=pct; worst=t; }
+  });
+  return worst;
+}
+
+async function init(){
+  try{
+    const response = await fetch('/api/health');
+    if(!response.ok) throw new Error('Server tidak tersedia.');
+    const health = await response.json();
+    if(!health.configured) throw new Error('API key OpenAI belum diatur.');
+    aiAvailable = true;
+    badge.textContent = "AI aktif";
+  }catch(error){
+    aiAvailable = false;
+    badge.textContent = "AI tidak tersedia";
+    badge.style.borderColor = 'var(--wrong)';
+    badge.style.color = 'var(--wrong)';
+  }
+  start();
+}
+
+function start(){
+  chat.innerHTML=''; footer.innerHTML='';
+  const h = getHistory();
+  const hasHistory = Object.keys(h).length>0;
+  let msg = "Halo! Aku QuizBot. Pilih topik di bawah, atau ketik topik sendiri, nanti AI akan membuatkan soal khusus untukmu.";
+  if(hasHistory){
+    const weak = weakestTopic();
+    if(weak) msg += ` Dari riwayatmu, topik <b>${escapeHtml(weak)}</b> kelihatannya masih perlu banyak latihan.`;
+  }
+  const b = addBot(msg);
+  const grid = document.createElement('div');
+  grid.className='topic-grid';
+  TOPICS.forEach(t=>{
+    const btn=document.createElement('button');
+    btn.className='topic-btn'; btn.textContent=t;
+    btn.onclick=()=>{ addUser(t); pickTopic(t); };
+    grid.appendChild(btn);
+  });
+  b.appendChild(grid);
+  const customRow = document.createElement('div');
+  customRow.className='custom-row';
+  customRow.innerHTML = `<input id="customTopic" placeholder="atau ketik topik lain..." /><button class="action-btn" id="customGo">Mulai</button>`;
+  b.appendChild(customRow);
+  document.getElementById('customGo').onclick = ()=>{
+    const v = document.getElementById('customTopic').value.trim();
+    if(v){ addUser(v); pickTopic(v); }
+  };
+  document.getElementById('customTopic').onkeydown = (e)=>{ if(e.key==='Enter') document.getElementById('customGo').click(); };
+  if(hasHistory){
+    footer.innerHTML = `<button class="action-btn ghost" id="histBtn">Lihat Riwayat</button>`;
+    document.getElementById('histBtn').onclick = showHistory;
+  }
+}
+
+function showHistory(){
+  const h = getHistory();
+  let lines = Object.keys(h).map(t=>{
+    const arr=h[t]; const last=arr[arr.length-1];
+    return `<div class="stat-line">${escapeHtml(t)}: ${last.score}/${last.total} (percobaan terakhir)</div>`;
+  }).join('');
+  addUser('Lihat riwayat');
+  addBot(`Ini riwayat latihanmu:${lines}`);
+}
+
+async function pickTopic(topic){
+  footer.innerHTML='';
+  if(!aiAvailable){
+    addBot("Maaf, koneksi ke AI sedang tidak tersedia di tampilan ini, jadi aku belum bisa membuatkan soal baru. Coba muat ulang halaman.");
+    footer.innerHTML = `<button class="action-btn ghost" id="backBtn">Kembali</button>`;
+    document.getElementById('backBtn').onclick = start;
+    return;
+  }
+  const typingRow = addTyping("QuizBot sedang menyusun soal tentang " + topic + "...");
+  let questions = null;
+  try{
+    const result = await apiRequest('/api/questions', {topic});
+    questions = result.questions;
+  }catch(error){
+    questions = null;
+    addBot(`Gagal membuat soal: ${escapeHtml(error.message)}`);
+  }
+  typingRow.remove();
+  if(!questions || questions.length===0){
+    footer.innerHTML = `<button class="action-btn ghost" id="backBtn">Kembali</button>`;
+    document.getElementById('backBtn').onclick = start;
+    return;
+  }
+  state = {topic, qs: questions, idx:0, score:0};
+  addBot(`Oke, ini ${questions.length} soal tentang <b>${escapeHtml(topic)}</b>, langsung dibuat oleh AI. Semangat!`);
+  setTimeout(askQuestion, 250);
+}
+
+function askQuestion(){
+  const {qs, idx} = state;
+  const q = qs[idx];
+  const b = addBot(`Soal ${idx+1}/${qs.length}: ${escapeHtml(q.q)}`);
+  const wrap = document.createElement('div');
+  wrap.className='opts';
+  q.opts.forEach((o,i)=>{
+    const btn=document.createElement('button');
+    btn.className='opt'; btn.textContent=o;
+    btn.onclick=()=>answer(i, wrap);
+    wrap.appendChild(btn);
+  });
+  b.appendChild(wrap);
+}
+
+function answer(i, wrap){
+  const {qs, idx} = state;
+  const q = qs[idx];
+  addUser(q.opts[i]);
+  [...wrap.children].forEach((btn,bi)=>{
+    btn.disabled=true;
+    if(bi===q.a) btn.classList.add('correct');
+    else if(bi===i) btn.classList.add('wrong');
+  });
+  const correct = i===q.a;
+  if(correct) state.score++;
+  setTimeout(()=>{
+    const explain = q.explain ? ` ${escapeHtml(q.explain)}` : '';
+    addBot(correct ? `Benar!${explain}` : `Kurang tepat, jawaban yang benar: <b>${escapeHtml(q.opts[q.a])}</b>.${explain}`);
+    state.idx++;
+    setTimeout(()=>{
+      if(state.idx < qs.length) askQuestion();
+      else finish();
+    }, 500);
+  }, 300);
+}
+
+async function finish(){
+  const {topic, score, qs} = state;
+  saveHistory(topic, score, qs.length);
+  const pct = Math.round((score/qs.length)*100);
+  addBot(`Selesai! Skormu <b>${score}/${qs.length}</b> (${pct}%).`);
+  footer.innerHTML = `
+    <button class="action-btn" id="retryBtn">Coba Topik Lain</button>
+    <button class="action-btn ghost" id="againBtn">Ulangi Topik Ini</button>
+  `;
+  document.getElementById('retryBtn').onclick = start;
+  document.getElementById('againBtn').onclick = ()=>pickTopic(topic);
+
+  if(aiAvailable){
+    const typingRow = addTyping("QuizBot sedang menyiapkan tips belajar...");
+    try{
+      const result = await apiRequest('/api/tip', {topic, score, total:qs.length});
+      typingRow.remove();
+      addBot(escapeHtml(result.tip));
+    }catch(error){
+      typingRow.remove();
+      addBot(`Tips belajar tidak tersedia: ${escapeHtml(error.message)}`);
+    }
+  }
+}
+
+init();
+</script>
+</body>
+</html>
