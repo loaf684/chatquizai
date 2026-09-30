@@ -2,13 +2,14 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const {askGemini, parseQuestions} = require('./lib/gemini');
+const {checkRateLimit} = require('./lib/rate-limit');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PAGE_PATH = path.join(__dirname, '3_quizbot_real_ai_api.html');
 const MAX_BODY_SIZE = 8 * 1024;
 
-function sendJson(response, status, data){
-  response.writeHead(status, {'Content-Type':'application/json; charset=utf-8'});
+function sendJson(response, status, data, headers = {}){
+  response.writeHead(status, {'Content-Type':'application/json; charset=utf-8', ...headers});
   response.end(JSON.stringify(data));
 }
 
@@ -64,15 +65,30 @@ async function handleApi(request, response, pathname){
     throw invalidRequest('Body harus berupa objek JSON.');
   }
   if(pathname === '/api/questions'){
-    if(typeof body.topic !== 'string' || !body.topic.trim() || body.topic.length > 120){
-      throw invalidRequest('Topik wajib diisi dan maksimal 120 karakter.');
+    const count = body.count === undefined ? 5 : body.count;
+    const difficulty = body.difficulty || 'Sedang';
+    if(
+      typeof body.topic !== 'string' ||
+      !body.topic.trim() ||
+      body.topic.length > 120 ||
+      ![5, 10, 15].includes(count) ||
+      !['Mudah', 'Sedang', 'Sulit'].includes(difficulty)
+    ){
+      throw invalidRequest('Pilih topik, jumlah soal 5/10/15, dan tingkat kesulitan yang tersedia.');
+    }
+    const limit = await checkRateLimit(request, count / 5);
+    if(!limit.allowed){
+      sendJson(response, 429, {
+        error:`Batas penggunaan tercapai. Coba lagi dalam ${Math.ceil(limit.retryAfter / 60)} menit.`
+      }, {'Retry-After':String(limit.retryAfter)});
+      return;
     }
     const content = await askGemini(
-      'Kamu adalah pembuat soal kuis berbahasa Indonesia. Hasilkan tepat 5 soal pilihan ganda tingkat mahasiswa. Untuk setiap soal, hanya ada satu jawaban benar dan tepat 4 opsi.',
-      `Buat soal tentang topik berikut: ${body.topic.trim()}. Variasikan tingkat kesulitan. Balas sebagai objek JSON dengan format {"questions":[{"q":"pertanyaan","opts":["opsi1","opsi2","opsi3","opsi4"],"a":0,"explain":"penjelasan singkat"}]}. Nilai a adalah indeks jawaban benar, mulai dari 0.`,
+      `Kamu adalah pembuat soal kuis berbahasa Indonesia. Hasilkan tepat ${count} soal pilihan ganda tingkat mahasiswa dengan tingkat kesulitan ${difficulty.toLowerCase()}. Setiap soal hanya memiliki satu jawaban benar dan tepat 4 opsi.`,
+      `Buat soal tentang topik berikut: ${body.topic.trim()}. Tingkat kesulitan: ${difficulty}. Balas sebagai objek JSON dengan format {"questions":[{"q":"pertanyaan","opts":["opsi1","opsi2","opsi3","opsi4"],"a":0,"explain":"penjelasan singkat"}]}. Hasilkan tepat ${count} soal. Nilai a adalah indeks jawaban benar, mulai dari 0.`,
       true
     );
-    sendJson(response, 200, {questions:parseQuestions(content)});
+    sendJson(response, 200, {questions:parseQuestions(content, count)});
     return;
   }
   if(pathname === '/api/tip'){
@@ -86,6 +102,13 @@ async function handleApi(request, response, pathname){
       body.score > body.total
     ){
       throw invalidRequest('Data hasil kuis tidak valid.');
+    }
+    const limit = await checkRateLimit(request);
+    if(!limit.allowed){
+      sendJson(response, 429, {
+        error:`Batas penggunaan AI tercapai. Coba lagi dalam ${Math.ceil(limit.retryAfter / 60)} menit.`
+      }, {'Retry-After':String(limit.retryAfter)});
+      return;
     }
     const tip = await askGemini(
       'Berikan satu tips belajar yang singkat, maksimal dua kalimat, dalam bahasa Indonesia dengan nada suportif.',
@@ -105,7 +128,11 @@ const server = http.createServer(async (request, response)=>{
     }catch(error){
       console.error('Gemini API request failed:', error.message);
       if(!response.headersSent){
-        sendJson(response, error.statusCode || 502, {error:error.message || 'Permintaan ke Gemini gagal.'});
+        const status = error.statusCode || 502;
+        const message = status === 429
+          ? 'Kuota gratis Gemini sedang habis atau mencapai batas. Tunggu hingga kuota pulih, lalu coba lagi; periksa Google AI Studio jika masih berlanjut.'
+          : error.message || 'Permintaan ke Gemini gagal.';
+        sendJson(response, status, {error:message}, status === 429 ? {'Retry-After':'60'} : {});
       }
     }
     return;

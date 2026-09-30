@@ -25,7 +25,7 @@
   button:focus-visible,input:focus-visible{outline:3px solid var(--focus); outline-offset:2px;}
   .app{
     width:100%; max-width:620px; display:flex; flex-direction:column;
-    height:100%; height:100dvh; max-height:900px; min-height:0;
+    height:calc(100dvh - clamp(20px,6vw,56px)); max-height:900px; min-height:0;
     overflow:hidden; border:1px solid rgba(148,167,159,.12); border-radius:22px;
     background:rgba(17,25,23,.86); box-shadow:0 24px 90px rgba(0,0,0,.35);
     backdrop-filter:blur(16px);
@@ -81,7 +81,19 @@
     padding:11px 12px; border-radius:10px; font-size:.82rem;
   }
   .custom-row input::placeholder{color:#71847c;}
-  .stat-line{ font-family:Arial,sans-serif; font-size:.79rem; color:var(--muted); padding:7px 0; border-bottom:1px solid rgba(41,56,50,.7); }
+  .quiz-settings{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(41,56,50,.7);}
+  .setting-field{display:flex;flex-direction:column;gap:6px;font: .68rem Arial,sans-serif;color:var(--muted);}
+  .setting-field select{width:100%;min-height:42px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#101816;color:var(--ink);font: .78rem Arial,sans-serif;}
+  .history-summary{margin-top:12px;}
+  .history-topic{margin:13px 0 4px;color:var(--accent);font-weight:700;}
+  .history-attempt{font-family:Arial,sans-serif;font-size:.75rem;color:var(--muted);padding:6px 0;border-bottom:1px solid rgba(41,56,50,.7);}
+  .review-list{display:flex;flex-direction:column;gap:11px;margin-top:13px;}
+  .review-item{padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.015);}
+  .review-question{font-weight:600;margin-bottom:8px;}
+  .review-answer{font-size:.81rem;margin-top:5px;}
+  .review-answer.correct{color:var(--accent);}
+  .review-answer.incorrect{color:#ffb1a8;}
+  .review-explain{font-size:.78rem;color:var(--muted);margin-top:7px;}
   .typing{ display:flex; align-items:center; gap:10px; color:var(--muted); font-size:.82rem; }
   .typing::before{content:""; width:14px; height:14px; border:2px solid rgba(112,224,184,.25); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite;}
   footer{ min-height:62px; padding:12px 22px max(14px,env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:rgba(12,18,17,.55); }
@@ -108,6 +120,8 @@
     .chat{padding:17px 15px;gap:12px;}
     .bubble{max-width:95%;padding:12px 13px;}
     footer{padding-left:16px;padding-right:16px;}
+    .quiz-settings{gap:7px;}
+    .setting-field select{font-size:.74rem;}
   }
   @media(max-width:360px){header p{font-size:.68rem;}.badge{font-size:.63rem;padding:6px 8px;}.topic-grid{grid-template-columns:1fr;}}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}
@@ -145,6 +159,7 @@ const progressFill = document.getElementById('progressFill');
 let aiAvailable = false;
 let requestingQuestions = false;
 let historyShown = false;
+let retryCooldownTimer = null;
 let state = {};
 
 function updateProgress(complete = false){
@@ -179,8 +194,17 @@ async function apiRequest(path, payload){
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(payload)
   });
-  const result = await response.json();
-  if(!response.ok) throw new Error(result.error || 'Permintaan ke AI gagal.');
+  let result;
+  try{
+    result = await response.json();
+  }catch{
+    throw new Error('Server mengirim respons yang tidak bisa dibaca. Coba lagi sebentar.');
+  }
+  if(!response.ok){
+    const error = new Error(result.error || 'Permintaan ke AI gagal.');
+    error.retryAfter = Number(response.headers.get('Retry-After')) || 0;
+    throw error;
+  }
   return result;
 }
 
@@ -215,13 +239,28 @@ function addTyping(label){
 }
 
 function getHistory(){
-  try{ return JSON.parse(localStorage.getItem('quizbot_history')||'{}'); }catch(e){ return {}; }
+  try{
+    const value = JSON.parse(localStorage.getItem('quizbot_history')||'{}');
+    if(!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).map(([topic, attempts])=>[
+      topic,
+      Array.isArray(attempts) ? attempts.filter(attempt=>
+        attempt &&
+        Number.isFinite(attempt.score) &&
+        Number.isFinite(attempt.total) &&
+        attempt.total > 0 &&
+        attempt.score >= 0 &&
+        attempt.score <= attempt.total
+      ) : []
+    ]).filter(([,attempts])=>attempts.length));
+  }catch(e){ return {}; }
 }
-function saveHistory(topic, score, total){
+function saveHistory(topic, score, total, difficulty){
   try{
     const h = getHistory();
     if(!h[topic]) h[topic] = [];
-    h[topic].push({score, total, t: Date.now()});
+    h[topic].push({score, total, difficulty, t: Date.now()});
+    h[topic] = h[topic].slice(-20);
     localStorage.setItem('quizbot_history', JSON.stringify(h));
   }catch(e){}
 }
@@ -234,6 +273,61 @@ function weakestTopic(){
     if(pct<worstPct){ worstPct=pct; worst=t; }
   });
   return worst;
+}
+
+function quizSettings(){
+  return {
+    count:Number(document.getElementById('questionCount').value),
+    difficulty:document.getElementById('difficulty').value
+  };
+}
+
+function appendQuizSettings(bubble){
+  const settings = document.createElement('div');
+  settings.className = 'quiz-settings';
+  settings.innerHTML = `
+    <label class="setting-field">Jumlah soal
+      <select id="questionCount" aria-label="Jumlah soal">
+        <option value="5" selected>5 soal</option><option value="10">10 soal</option><option value="15">15 soal</option>
+      </select>
+    </label>
+    <label class="setting-field">Kesulitan
+      <select id="difficulty" aria-label="Tingkat kesulitan">
+        <option value="Mudah">Mudah</option><option value="Sedang" selected>Sedang</option><option value="Sulit">Sulit</option>
+      </select>
+    </label>`;
+  bubble.appendChild(settings);
+}
+
+function retryButton(topic, settings, retryAfter = 0){
+  if(retryCooldownTimer){
+    clearInterval(retryCooldownTimer);
+    retryCooldownTimer = null;
+  }
+  const footerMarkup = `<button class="action-btn" id="retryQuizBtn">Coba lagi</button><button class="action-btn ghost" id="backBtn">Pilih topik lain</button>`;
+  footer.innerHTML = footerMarkup;
+  const retry = document.getElementById('retryQuizBtn');
+  document.getElementById('backBtn').onclick = start;
+  retry.onclick = ()=>{
+    retry.disabled = true;
+    pickTopic(topic, settings);
+  };
+  if(retryAfter > 0){
+    retry.disabled = true;
+    const deadline = Date.now() + retryAfter * 1000;
+    const update = ()=>{
+      const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      retry.textContent = `Coba lagi (${seconds} dtk)`;
+      if(seconds <= 0){
+        clearInterval(retryCooldownTimer);
+        retryCooldownTimer = null;
+        retry.disabled = false;
+        retry.textContent = 'Coba lagi';
+      }
+    };
+    update();
+    retryCooldownTimer = setInterval(update, 1000);
+  }
 }
 
 async function init(){
@@ -257,6 +351,10 @@ async function init(){
 }
 
 function start(){
+  if(retryCooldownTimer){
+    clearInterval(retryCooldownTimer);
+    retryCooldownTimer = null;
+  }
   requestingQuestions = false;
   historyShown = false;
   state = {};
@@ -280,6 +378,7 @@ function start(){
     grid.appendChild(btn);
   });
   b.appendChild(grid);
+  appendQuizSettings(b);
   const customRow = document.createElement('div');
   customRow.className='custom-row';
   customRow.innerHTML = `<input id="customTopic" maxlength="120" aria-label="Topik kuis sendiri" placeholder="Tulis topik lain..." /><button class="action-btn" id="customGo">Buat kuis</button>`;
@@ -302,15 +401,24 @@ function showHistory(){
   const historyButton = document.getElementById('histBtn');
   if(historyButton) historyButton.remove();
   const h = getHistory();
-  let lines = Object.keys(h).map(t=>{
-    const arr=h[t]; const last=arr[arr.length-1];
-    return `<div class="stat-line">${escapeHtml(t)}: ${last.score}/${last.total} (percobaan terakhir)</div>`;
+  const lines = Object.keys(h).map(topic=>{
+    const attempts = h[topic];
+    const last = attempts[attempts.length-1];
+    const best = attempts.reduce((top, attempt)=>
+      attempt.score / attempt.total > top.score / top.total ? attempt : top
+    );
+    const recent = attempts.slice(-5).reverse().map(attempt=>{
+      const date = new Date(attempt.t).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'});
+      const level = attempt.difficulty ? ` · ${escapeHtml(attempt.difficulty)}` : '';
+      return `<div class="history-attempt">${date}${level} — ${attempt.score}/${attempt.total} (${Math.round(attempt.score/attempt.total*100)}%)</div>`;
+    }).join('');
+    return `<div class="history-summary"><div class="history-topic">${escapeHtml(topic)}</div><div class="stat-line">Terakhir ${last.score}/${last.total} · Terbaik ${best.score}/${best.total} · ${attempts.length} percobaan</div>${recent}</div>`;
   }).join('');
   addUser('Lihat riwayat');
-  addBot(`Ini riwayat latihanmu:${lines}`);
+  addBot(`<strong>Riwayat latihan</strong>${lines || '<div class="stat-line">Belum ada percobaan.</div>'}`);
 }
 
-async function pickTopic(topic){
+async function pickTopic(topic, options = quizSettings()){
   if(requestingQuestions) return;
   footer.innerHTML='';
   if(!aiAvailable){
@@ -321,25 +429,26 @@ async function pickTopic(topic){
   }
   requestingQuestions = true;
   setTopicControlsDisabled(true);
+  state = {topic, count:options.count, difficulty:options.difficulty};
   const typingRow = addTyping("QuizBot sedang menyusun soal tentang " + topic + "...");
   let questions = null;
   try{
-    const result = await apiRequest('/api/questions', {topic});
+    const result = await apiRequest('/api/questions', {topic, ...options});
     questions = result.questions;
   }catch(error){
     questions = null;
     addBot(`<span class="error-note">Belum berhasil membuat soal.</span><br>${escapeHtml(error.message)}`);
+    state.retryAfter = error.retryAfter || 0;
   }
   typingRow.remove();
   if(!questions || questions.length===0){
     requestingQuestions = false;
     setTopicControlsDisabled(false);
-    footer.innerHTML = `<button class="action-btn ghost" id="backBtn">Kembali</button>`;
-    document.getElementById('backBtn').onclick = start;
+    retryButton(topic, options, state.retryAfter);
     return;
   }
   requestingQuestions = false;
-  state = {topic, qs: questions, idx:0, score:0};
+  state = {topic, qs: questions, idx:0, score:0, answers:[], difficulty:options.difficulty};
   updateProgress();
   addBot(`Oke, ini ${questions.length} soal tentang <b>${escapeHtml(topic)}</b>, langsung dibuat oleh AI. Semangat!`);
   setTimeout(askQuestion, 250);
@@ -371,6 +480,7 @@ function answer(i, wrap){
     else if(bi===i) btn.classList.add('wrong');
   });
   const correct = i===q.a;
+  state.answers[idx] = i;
   if(correct) state.score++;
   updateProgress();
   setTimeout(()=>{
@@ -385,14 +495,20 @@ function answer(i, wrap){
 }
 
 async function finish(){
-  const {topic, score, qs} = state;
-  saveHistory(topic, score, qs.length);
+  const {topic, score, qs, difficulty} = state;
+  saveHistory(topic, score, qs.length, difficulty);
   const pct = Math.round((score/qs.length)*100);
   updateProgress(true);
   const encouragement = pct >= 80 ? 'Hebat! Pemahamanmu sudah kuat.' :
     pct >= 50 ? 'Bagus, sedikit lagi makin mantap.' :
     'Terus latihan, kamu pasti makin paham.';
   addBot(`<span class="result-score">${score}/${qs.length} · ${pct}%</span><br>${encouragement}`);
+  const review = qs.map((question,index)=>{
+    const selected = state.answers[index];
+    const correct = selected === question.a;
+    return `<div class="review-item"><div class="review-question">${index+1}. ${escapeHtml(question.q)}</div><div class="review-answer ${correct?'correct':'incorrect'}">${correct?'✓ Benar':'✕ Jawabanmu'}: ${escapeHtml(question.opts[selected])}</div>${correct?'':`<div class="review-answer correct">Jawaban benar: ${escapeHtml(question.opts[question.a])}</div>`}${question.explain?`<div class="review-explain">${escapeHtml(question.explain)}</div>`:''}</div>`;
+  }).join('');
+  addBot(`<strong>Ulasan jawaban</strong><div class="review-list">${review}</div>`);
   footer.innerHTML = `
     <button class="action-btn" id="retryBtn">Coba Topik Lain</button>
     <button class="action-btn ghost" id="againBtn">Ulangi Topik Ini</button>

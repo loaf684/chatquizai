@@ -1,4 +1,5 @@
 const {askGemini, sendError} = require('../lib/gemini');
+const {checkRateLimit} = require('../lib/rate-limit');
 
 module.exports = async (request, response)=>{
   if(request.method !== 'POST'){
@@ -22,6 +23,15 @@ module.exports = async (request, response)=>{
   }
 
   try{
+    const limit = await checkRateLimit(request);
+    response.setHeader('X-RateLimit-Mode', limit.mode);
+    if(!limit.allowed){
+      response.setHeader('Retry-After', String(limit.retryAfter));
+      response.status(429).json({
+        error:`Batas penggunaan AI tercapai. Coba lagi dalam ${Math.ceil(limit.retryAfter / 60)} menit.`
+      });
+      return;
+    }
     const tip = await askGemini(
       'Berikan satu tips belajar yang singkat, maksimal dua kalimat, dalam bahasa Indonesia dengan nada suportif.',
       `Mahasiswa mengerjakan kuis topik "${topic.trim()}" dan mendapat skor ${score} dari ${total}. Berikan tips belajar untuk membantunya memahami topik tersebut.`
