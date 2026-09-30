@@ -1,4 +1,4 @@
-const {askOpenAI, sendError} = require('../lib/openai');
+const {askGemini, sendError} = require('../lib/gemini');
 
 module.exports = async (request, response)=>{
   if(request.method !== 'POST'){
@@ -22,16 +22,10 @@ module.exports = async (request, response)=>{
   }
 
   try{
-    const tip = await askOpenAI([
-      {
-        role:'system',
-        content:'Berikan satu tips belajar yang singkat, maksimal dua kalimat, dalam bahasa Indonesia dengan nada suportif.'
-      },
-      {
-        role:'user',
-        content:`Mahasiswa mengerjakan kuis topik "${topic.trim()}" dan mendapat skor ${score} dari ${total}. Berikan tips belajar untuk membantunya memahami topik tersebut.`
-      }
-    ]);
+    const tip = await askGemini(
+      'Berikan satu tips belajar yang singkat, maksimal dua kalimat, dalam bahasa Indonesia dengan nada suportif.',
+      `Mahasiswa mengerjakan kuis topik "${topic.trim()}" dan mendapat skor ${score} dari ${total}. Berikan tips belajar untuk membantunya memahami topik tersebut.`
+    );
     response.status(200).json({tip:tip.trim()});
   }catch(error){
     sendError(response, error);

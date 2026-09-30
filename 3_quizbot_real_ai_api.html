@@ -150,16 +150,19 @@ function weakestTopic(){
 async function init(){
   try{
     const response = await fetch('/api/health');
-    if(!response.ok) throw new Error('Server tidak tersedia.');
     const health = await response.json();
-    if(!health.configured) throw new Error('API key OpenAI belum diatur.');
+    if(!response.ok) throw new Error(health.error || 'Server tidak tersedia.');
+    if(!health.configured) throw new Error(health.setupMessage || 'GEMINI_API_KEY belum diatur.');
     aiAvailable = true;
-    badge.textContent = "AI aktif";
+    badge.textContent = "Gemini aktif";
   }catch(error){
     aiAvailable = false;
-    badge.textContent = "AI tidak tersedia";
+    badge.textContent = error.message.includes('GEMINI_API_KEY')
+      ? "API key belum diatur"
+      : "AI tidak tersedia";
     badge.style.borderColor = 'var(--wrong)';
     badge.style.color = 'var(--wrong)';
+    badge.title = error.message;
   }
   start();
 }
@@ -211,7 +214,7 @@ function showHistory(){
 async function pickTopic(topic){
   footer.innerHTML='';
   if(!aiAvailable){
-    addBot("Maaf, koneksi ke AI sedang tidak tersedia di tampilan ini, jadi aku belum bisa membuatkan soal baru. Coba muat ulang halaman.");
+    addBot(`Gemini belum siap: ${escapeHtml(badge.title || 'Periksa koneksi server dan pengaturan API.')}`);
     footer.innerHTML = `<button class="action-btn ghost" id="backBtn">Kembali</button>`;
     document.getElementById('backBtn').onclick = start;
     return;
