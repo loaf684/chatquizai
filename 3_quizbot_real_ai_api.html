@@ -6,67 +6,129 @@
 <title>QuizBot AI — Chatbot Latihan Soal</title>
 <style>
   :root{
-    --bg:#0F1414; --panel:#171E1D; --bubble-bot:#1F2826; --bubble-user:#274038;
-    --ink:#EDEFEA; --muted:#8FA39B; --accent:#5CC8A6; --wrong:#D9695F; --line:#2A332F;
+    color-scheme:dark;
+    --bg:#0C1211; --panel:#141D1B; --bubble-bot:#192320; --bubble-user:#203B32;
+    --ink:#F1F5F1; --muted:#94A79F; --accent:#70E0B8; --wrong:#FF8277; --line:#293832;
+    --focus:rgba(112,224,184,.32);
     box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box;}
-  html,body{height:100%; margin:0;}
+  html,body{height:100%; min-height:100%; margin:0;}
   body{
-    background:var(--bg); color:var(--ink); font-family:Georgia,'Iowan Old Style',serif;
-    display:flex; justify-content:center; padding:20px;
+    background:
+      radial-gradient(ellipse at 50% -15%, rgba(50,112,87,.2), transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:Georgia,'Iowan Old Style',serif;
+    display:flex; justify-content:center; padding:clamp(10px,3vw,28px);
   }
-  .app{ width:100%; max-width:520px; display:flex; flex-direction:column; height:100%; max-height:820px; }
-  header{ padding:0 4px 14px; border-bottom:1px solid var(--line); margin-bottom:14px; display:flex; justify-content:space-between; align-items:baseline; }
-  header h1{ font-size:1.3rem; font-weight:400; margin:0 0 2px; }
-  header p{ font-family:Arial,sans-serif; color:var(--muted); font-size:.78rem; margin:0; }
-  .badge{ font-family:Arial,sans-serif; font-size:.68rem; color:var(--accent); border:1px solid var(--accent); padding:2px 8px; border-radius:10px; white-space:nowrap; }
-  .chat{ flex:1; overflow-y:auto; padding:4px 2px; display:flex; flex-direction:column; gap:10px; }
+  button,input{font:inherit;}
+  button:focus-visible,input:focus-visible{outline:3px solid var(--focus); outline-offset:2px;}
+  .app{
+    width:100%; max-width:620px; display:flex; flex-direction:column;
+    height:100%; height:100dvh; max-height:900px; min-height:0;
+    overflow:hidden; border:1px solid rgba(148,167,159,.12); border-radius:22px;
+    background:rgba(17,25,23,.86); box-shadow:0 24px 90px rgba(0,0,0,.35);
+    backdrop-filter:blur(16px);
+  }
+  header{ padding:20px 22px 17px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .brand{display:flex; align-items:center; gap:12px; min-width:0;}
+  .brand-mark{
+    display:grid; place-items:center; flex:none; width:42px; height:42px; border-radius:14px;
+    background:linear-gradient(145deg,#94f0cb,#49bd96); color:#10231c;
+    font:700 1.05rem Arial,sans-serif; box-shadow:0 7px 22px rgba(92,200,166,.2);
+  }
+  header h1{ font-size:1.22rem; font-weight:600; letter-spacing:-.025em; margin:0 0 4px; }
+  header p{ font-family:Arial,sans-serif; color:var(--muted); font-size:.76rem; margin:0; }
+  .badge{ display:inline-flex; align-items:center; gap:7px; font-family:Arial,sans-serif; font-size:.7rem; color:var(--accent); border:1px solid rgba(112,224,184,.26); background:rgba(112,224,184,.07); padding:7px 10px; border-radius:999px; white-space:nowrap; }
+  .badge::before{content:""; width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 10px currentColor;}
+  .quiz-progress{padding:13px 22px 14px; border-bottom:1px solid rgba(41,56,50,.72);}
+  .progress-meta{display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; font: .72rem Arial,sans-serif; color:var(--muted);}
+  .progress-meta strong{color:var(--ink); font-weight:600;}
+  .progress-track{height:5px; overflow:hidden; border-radius:8px; background:#26332e;}
+  .progress-fill{height:100%; width:0; border-radius:inherit; background:linear-gradient(90deg,#47bd91,var(--accent)); transition:width .35s ease;}
+  .chat{ flex:1; min-height:0; overflow-y:auto; padding:20px 22px; display:flex; flex-direction:column; gap:14px; scroll-behavior:smooth; overscroll-behavior:contain; }
   .row{ display:flex; }
   .row.bot{ justify-content:flex-start; }
   .row.user{ justify-content:flex-end; }
-  .bubble{ max-width:84%; padding:11px 14px; border-radius:12px; font-size:.95rem; line-height:1.45; font-family:Arial,sans-serif; }
-  .bot .bubble{ background:var(--bubble-bot); border-top-left-radius:3px; }
-  .user .bubble{ background:var(--bubble-user); border-top-right-radius:3px; }
-  .opts{ display:flex; flex-direction:column; gap:8px; margin-top:2px; }
+  .bubble{ max-width:min(91%,500px); padding:14px 16px; border:1px solid transparent; border-radius:17px; font-size:.91rem; line-height:1.55; font-family:Arial,sans-serif; animation:rise-in .2s ease-out both; }
+  .bot .bubble{ background:var(--bubble-bot); border-color:rgba(148,167,159,.08); border-top-left-radius:5px; }
+  .user .bubble{ background:var(--bubble-user); border-color:rgba(112,224,184,.11); border-top-right-radius:5px; }
+  .opts{ display:flex; flex-direction:column; gap:8px; margin-top:13px; }
   .opt{
-    font-family:Arial,sans-serif; text-align:left; background:transparent; color:var(--ink);
-    border:1px solid var(--line); padding:10px 13px; border-radius:8px; cursor:pointer; font-size:.9rem;
+    display:flex; align-items:flex-start; gap:10px; width:100%;
+    font-family:Arial,sans-serif; text-align:left; background:rgba(255,255,255,.015); color:var(--ink);
+    border:1px solid var(--line); padding:11px 12px; border-radius:11px; cursor:pointer; font-size:.86rem; line-height:1.4;
+    transition:border-color .15s,background .15s,transform .15s;
   }
-  .opt:hover{ border-color:var(--accent); }
+  .opt::before{content:""; display:block; flex:none; width:8px; height:8px; margin-top:4px; border:1px solid var(--muted); border-radius:50%;}
+  .opt:hover:not(:disabled){ border-color:var(--accent); background:rgba(112,224,184,.06); transform:translateY(-1px); }
   .opt:disabled{ cursor:default; }
-  .opt.correct{ border-color:var(--accent); background:rgba(92,200,166,.12); }
-  .opt.wrong{ border-color:var(--wrong); background:rgba(217,105,95,.12); }
-  .topic-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:2px; }
+  .opt.correct{ border-color:var(--accent); background:rgba(112,224,184,.1); }
+  .opt.correct::before{border-color:var(--accent); background:var(--accent); box-shadow:inset 0 0 0 2px var(--bubble-bot);}
+  .opt.wrong{ border-color:var(--wrong); background:rgba(255,130,119,.09); }
+  .opt.wrong::before{border-color:var(--wrong); background:var(--wrong);}
+  .topic-grid{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:15px; }
   .topic-btn{
-    font-family:Arial,sans-serif; background:transparent; color:var(--ink); border:1px solid var(--line);
-    padding:12px 10px; border-radius:8px; cursor:pointer; font-size:.85rem; text-align:left;
+    min-height:48px; font-family:Arial,sans-serif; background:rgba(255,255,255,.02); color:var(--ink); border:1px solid var(--line);
+    padding:11px 12px; border-radius:11px; cursor:pointer; font-size:.8rem; font-weight:500; text-align:left;
+    transition:border-color .15s,background .15s,transform .15s;
   }
-  .topic-btn:hover{ border-color:var(--accent); }
-  .custom-row{ display:flex; gap:8px; margin-top:10px; }
+  .topic-btn:hover:not(:disabled){ border-color:var(--accent); background:rgba(112,224,184,.06); transform:translateY(-1px); }
+  .topic-btn:disabled,.action-btn:disabled{opacity:.55; cursor:wait;}
+  .custom-row{ display:flex; gap:9px; margin-top:13px; }
   .custom-row input{
-    flex:1; font-family:Arial,sans-serif; background:transparent; border:1px solid var(--line); color:var(--ink);
-    padding:9px 11px; border-radius:8px; font-size:.85rem;
+    min-width:0; flex:1; font-family:Arial,sans-serif; background:#101816; border:1px solid var(--line); color:var(--ink);
+    padding:11px 12px; border-radius:10px; font-size:.82rem;
   }
-  .stat-line{ font-family:Arial,sans-serif; font-size:.8rem; color:var(--muted); margin-top:2px; }
-  .typing{ font-family:Arial,sans-serif; color:var(--muted); font-size:.85rem; font-style:italic; }
-  footer{ padding-top:10px; }
+  .custom-row input::placeholder{color:#71847c;}
+  .stat-line{ font-family:Arial,sans-serif; font-size:.79rem; color:var(--muted); padding:7px 0; border-bottom:1px solid rgba(41,56,50,.7); }
+  .typing{ display:flex; align-items:center; gap:10px; color:var(--muted); font-size:.82rem; }
+  .typing::before{content:""; width:14px; height:14px; border:2px solid rgba(112,224,184,.25); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite;}
+  footer{ min-height:62px; padding:12px 22px max(14px,env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:rgba(12,18,17,.55); }
   .action-btn{
-    font-family:Arial,sans-serif; background:var(--accent); color:#0F1414; border:none;
-    padding:10px 16px; border-radius:8px; cursor:pointer; font-size:.85rem; font-weight:600; margin-right:8px;
+    font-family:Arial,sans-serif; background:var(--accent); color:#10231c; border:1px solid transparent;
+    padding:10px 15px; border-radius:10px; cursor:pointer; font-size:.8rem; font-weight:700; margin:0 7px 0 0;
+    transition:filter .15s,transform .15s;
   }
-  .action-btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .action-btn:hover:not(:disabled){filter:brightness(1.08); transform:translateY(-1px);}
+  .action-btn.ghost{ background:transparent; color:var(--ink); border-color:var(--line); }
+  .result-score{font-size:1.12rem; font-weight:700; color:var(--accent);}
+  .feedback-title{font-weight:700;}
+  .error-note{color:#ffb1a8;}
   ::-webkit-scrollbar{ width:6px; }
-  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+  ::-webkit-scrollbar-thumb{ background:#34443d; border-radius:4px; }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  @keyframes rise-in{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+  @media(max-width:520px){
+    body{padding:0;background:var(--bg);}
+    .app{height:100%;height:100dvh;max-height:none;border:0;border-radius:0;}
+    header{padding:15px 16px;}
+    .brand-mark{width:38px;height:38px;border-radius:12px;}
+    .quiz-progress{padding:12px 16px;}
+    .chat{padding:17px 15px;gap:12px;}
+    .bubble{max-width:95%;padding:12px 13px;}
+    footer{padding-left:16px;padding-right:16px;}
+  }
+  @media(max-width:360px){header p{font-size:.68rem;}.badge{font-size:.63rem;padding:6px 8px;}.topic-grid{grid-template-columns:1fr;}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div><h1>QuizBot AI</h1><p>Soal dibuat langsung oleh AI, real-time</p></div>
-    <span class="badge" id="badge">menghubungkan…</span>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">Q</span>
+      <div><h1>QuizBot AI</h1><p>Latihan personal, dibuat khusus untukmu</p></div>
+    </div>
+    <span class="badge" id="badge" role="status" aria-live="polite">Menghubungkan</span>
   </header>
-  <div class="chat" id="chat"></div>
+  <section class="quiz-progress" id="quizProgress" aria-label="Kemajuan kuis" hidden>
+    <div class="progress-meta"><strong id="progressLabel">Kuis</strong><span id="scoreLabel">Skor 0</span></div>
+    <div class="progress-track" role="progressbar" aria-label="Kemajuan kuis" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </section>
+  <div class="chat" id="chat" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Percakapan kuis"></div>
   <footer id="footer"></footer>
 </div>
 
@@ -75,8 +137,34 @@ const TOPICS = ["Struktur Data","Kecerdasan Buatan","Basis Data","Jaringan Kompu
 const chat = document.getElementById('chat');
 const footer = document.getElementById('footer');
 const badge = document.getElementById('badge');
+const quizProgress = document.getElementById('quizProgress');
+const progressLabel = document.getElementById('progressLabel');
+const scoreLabel = document.getElementById('scoreLabel');
+const progressTrack = document.querySelector('.progress-track');
+const progressFill = document.getElementById('progressFill');
 let aiAvailable = false;
+let requestingQuestions = false;
 let state = {};
+
+function updateProgress(complete = false){
+  if(!state.qs || state.qs.length === 0){
+    quizProgress.hidden = true;
+    return;
+  }
+  quizProgress.hidden = false;
+  const {idx, score, qs} = state;
+  const progress = complete ? 100 : Math.round((idx / qs.length) * 100);
+  progressLabel.textContent = complete ? 'Kuis selesai' : `Soal ${idx + 1} dari ${qs.length}`;
+  scoreLabel.textContent = `Skor ${score}`;
+  progressFill.style.width = `${progress}%`;
+  progressTrack.setAttribute('aria-valuenow', String(progress));
+}
+
+function setTopicControlsDisabled(disabled){
+  document.querySelectorAll('.topic-btn, #customTopic, #customGo').forEach(control=>{
+    control.disabled = disabled;
+  });
+}
 
 function escapeHtml(value){
   return String(value).replace(/[&<>"']/g, char=>({
@@ -168,6 +256,10 @@ async function init(){
 }
 
 function start(){
+  requestingQuestions = false;
+  state = {};
+  quizProgress.hidden = true;
+  setTopicControlsDisabled(false);
   chat.innerHTML=''; footer.innerHTML='';
   const h = getHistory();
   const hasHistory = Object.keys(h).length>0;
@@ -188,11 +280,12 @@ function start(){
   b.appendChild(grid);
   const customRow = document.createElement('div');
   customRow.className='custom-row';
-  customRow.innerHTML = `<input id="customTopic" placeholder="atau ketik topik lain..." /><button class="action-btn" id="customGo">Mulai</button>`;
+  customRow.innerHTML = `<input id="customTopic" maxlength="120" aria-label="Topik kuis sendiri" placeholder="Tulis topik lain..." /><button class="action-btn" id="customGo">Buat kuis</button>`;
   b.appendChild(customRow);
   document.getElementById('customGo').onclick = ()=>{
     const v = document.getElementById('customTopic').value.trim();
     if(v){ addUser(v); pickTopic(v); }
+    else document.getElementById('customTopic').focus();
   };
   document.getElementById('customTopic').onkeydown = (e)=>{ if(e.key==='Enter') document.getElementById('customGo').click(); };
   if(hasHistory){
@@ -212,13 +305,16 @@ function showHistory(){
 }
 
 async function pickTopic(topic){
+  if(requestingQuestions) return;
   footer.innerHTML='';
   if(!aiAvailable){
-    addBot(`Gemini belum siap: ${escapeHtml(badge.title || 'Periksa koneksi server dan pengaturan API.')}`);
+    addBot(`<span class="error-note">Gemini belum siap:</span> ${escapeHtml(badge.title || 'Periksa koneksi server dan pengaturan API.')}`);
     footer.innerHTML = `<button class="action-btn ghost" id="backBtn">Kembali</button>`;
     document.getElementById('backBtn').onclick = start;
     return;
   }
+  requestingQuestions = true;
+  setTopicControlsDisabled(true);
   const typingRow = addTyping("QuizBot sedang menyusun soal tentang " + topic + "...");
   let questions = null;
   try{
@@ -226,15 +322,19 @@ async function pickTopic(topic){
     questions = result.questions;
   }catch(error){
     questions = null;
-    addBot(`Gagal membuat soal: ${escapeHtml(error.message)}`);
+    addBot(`<span class="error-note">Belum berhasil membuat soal.</span><br>${escapeHtml(error.message)}`);
   }
   typingRow.remove();
   if(!questions || questions.length===0){
+    requestingQuestions = false;
+    setTopicControlsDisabled(false);
     footer.innerHTML = `<button class="action-btn ghost" id="backBtn">Kembali</button>`;
     document.getElementById('backBtn').onclick = start;
     return;
   }
+  requestingQuestions = false;
   state = {topic, qs: questions, idx:0, score:0};
+  updateProgress();
   addBot(`Oke, ini ${questions.length} soal tentang <b>${escapeHtml(topic)}</b>, langsung dibuat oleh AI. Semangat!`);
   setTimeout(askQuestion, 250);
 }
@@ -242,6 +342,7 @@ async function pickTopic(topic){
 function askQuestion(){
   const {qs, idx} = state;
   const q = qs[idx];
+  updateProgress();
   const b = addBot(`Soal ${idx+1}/${qs.length}: ${escapeHtml(q.q)}`);
   const wrap = document.createElement('div');
   wrap.className='opts';
@@ -265,6 +366,7 @@ function answer(i, wrap){
   });
   const correct = i===q.a;
   if(correct) state.score++;
+  updateProgress();
   setTimeout(()=>{
     const explain = q.explain ? ` ${escapeHtml(q.explain)}` : '';
     addBot(correct ? `Benar!${explain}` : `Kurang tepat, jawaban yang benar: <b>${escapeHtml(q.opts[q.a])}</b>.${explain}`);
@@ -280,7 +382,11 @@ async function finish(){
   const {topic, score, qs} = state;
   saveHistory(topic, score, qs.length);
   const pct = Math.round((score/qs.length)*100);
-  addBot(`Selesai! Skormu <b>${score}/${qs.length}</b> (${pct}%).`);
+  updateProgress(true);
+  const encouragement = pct >= 80 ? 'Hebat! Pemahamanmu sudah kuat.' :
+    pct >= 50 ? 'Bagus, sedikit lagi makin mantap.' :
+    'Terus latihan, kamu pasti makin paham.';
+  addBot(`<span class="result-score">${score}/${qs.length} · ${pct}%</span><br>${encouragement}`);
   footer.innerHTML = `
     <button class="action-btn" id="retryBtn">Coba Topik Lain</button>
     <button class="action-btn ghost" id="againBtn">Ulangi Topik Ini</button>
@@ -293,10 +399,10 @@ async function finish(){
     try{
       const result = await apiRequest('/api/tip', {topic, score, total:qs.length});
       typingRow.remove();
-      addBot(escapeHtml(result.tip));
+      addBot(`<span class="feedback-title">Tips belajar</span><br>${escapeHtml(result.tip)}`);
     }catch(error){
       typingRow.remove();
-      addBot(`Tips belajar tidak tersedia: ${escapeHtml(error.message)}`);
+      addBot(`Skormu tetap tersimpan. Tips belajar belum tersedia: ${escapeHtml(error.message)}`);
     }
   }
 }
