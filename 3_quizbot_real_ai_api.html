@@ -39,8 +39,6 @@
   }
   header h1{ font-size:1.22rem; font-weight:600; letter-spacing:-.025em; margin:0 0 4px; }
   header p{ font-family:Arial,sans-serif; color:var(--muted); font-size:.76rem; margin:0; }
-  .badge{ display:inline-flex; align-items:center; gap:7px; font-family:Arial,sans-serif; font-size:.7rem; color:var(--accent); border:1px solid rgba(112,224,184,.26); background:rgba(112,224,184,.07); padding:7px 10px; border-radius:999px; white-space:nowrap; }
-  .badge::before{content:""; width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 10px currentColor;}
   .quiz-progress{padding:13px 22px 14px; border-bottom:1px solid rgba(41,56,50,.72);}
   .progress-meta{display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; font: .72rem Arial,sans-serif; color:var(--muted);}
   .progress-meta strong{color:var(--ink); font-weight:600;}
@@ -123,7 +121,7 @@
     .quiz-settings{gap:7px;}
     .setting-field select{font-size:.74rem;}
   }
-  @media(max-width:360px){header p{font-size:.68rem;}.badge{font-size:.63rem;padding:6px 8px;}.topic-grid{grid-template-columns:1fr;}}
+  @media(max-width:360px){header p{font-size:.68rem;}.topic-grid{grid-template-columns:1fr;}}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}
 </style>
 </head>
@@ -134,7 +132,6 @@
       <span class="brand-mark" aria-hidden="true">Q</span>
       <div><h1>QuizBot AI</h1><p>Latihan personal, dibuat khusus untukmu</p></div>
     </div>
-    <span class="badge" id="badge" role="status" aria-live="polite">Menghubungkan</span>
   </header>
   <section class="quiz-progress" id="quizProgress" aria-label="Kemajuan kuis" hidden>
     <div class="progress-meta"><strong id="progressLabel">Kuis</strong><span id="scoreLabel">Skor 0</span></div>
@@ -150,13 +147,13 @@
 const TOPICS = ["Struktur Data","Kecerdasan Buatan","Basis Data","Jaringan Komputer"];
 const chat = document.getElementById('chat');
 const footer = document.getElementById('footer');
-const badge = document.getElementById('badge');
 const quizProgress = document.getElementById('quizProgress');
 const progressLabel = document.getElementById('progressLabel');
 const scoreLabel = document.getElementById('scoreLabel');
 const progressTrack = document.querySelector('.progress-track');
 const progressFill = document.getElementById('progressFill');
 let aiAvailable = false;
+let setupError = '';
 let requestingQuestions = false;
 let historyShown = false;
 let retryCooldownTimer = null;
@@ -337,15 +334,9 @@ async function init(){
     if(!response.ok) throw new Error(health.error || 'Server tidak tersedia.');
     if(!health.configured) throw new Error(health.setupMessage || 'GEMINI_API_KEY belum diatur.');
     aiAvailable = true;
-    badge.textContent = "Gemini aktif";
   }catch(error){
     aiAvailable = false;
-    badge.textContent = error.message.includes('GEMINI_API_KEY')
-      ? "API key belum diatur"
-      : "AI tidak tersedia";
-    badge.style.borderColor = 'var(--wrong)';
-    badge.style.color = 'var(--wrong)';
-    badge.title = error.message;
+    setupError = error.message;
   }
   start();
 }
@@ -422,7 +413,7 @@ async function pickTopic(topic, options = quizSettings()){
   if(requestingQuestions) return;
   footer.innerHTML='';
   if(!aiAvailable){
-    addBot(`<span class="error-note">Gemini belum siap:</span> ${escapeHtml(badge.title || 'Periksa koneksi server dan pengaturan API.')}`);
+    addBot(`<span class="error-note">Layanan AI belum tersedia:</span> ${escapeHtml(setupError || 'Periksa koneksi server dan pengaturan API.')}`);
     footer.innerHTML = `<button class="action-btn ghost" id="backBtn">Kembali</button>`;
     document.getElementById('backBtn').onclick = start;
     return;
