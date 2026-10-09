@@ -1,10 +1,10 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const {askGemini, parseQuestions} = require('./lib/gemini');
+const {askGemini, parseQuestions} = require('../lib/gemini');
 
 const PORT = Number(process.env.PORT) || 3000;
-const PAGE_PATH = path.join(__dirname, '3_quizbot_real_ai_api.html');
+const PAGE_PATH = path.join(__dirname, '..', 'index.html');
 const MAX_BODY_SIZE = 8 * 1024;
 
 function sendJson(response, status, data, headers = {}){
@@ -123,7 +123,7 @@ const server = http.createServer(async (request, response)=>{
     return;
   }
 
-  if(request.method !== 'GET' || (url.pathname !== '/' && url.pathname !== '/3_quizbot_real_ai_api.html')){
+  if(request.method !== 'GET' || (url.pathname !== '/' && url.pathname !== '/index.html')){
     response.writeHead(404);
     response.end('Not found');
     return;

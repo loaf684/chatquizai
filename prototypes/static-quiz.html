@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QuizBot — Latihan Soal Otomatis</title>
+<style>
+  :root{
+    --bg:#0F1414; --panel:#171E1D; --ink:#EDEFEA; --muted:#8FA39B;
+    --accent:#5CC8A6; --wrong:#D9695F; --line:#2A332F;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html{height:100%; scroll-padding-top:env(safe-area-inset-top,0px);}
+  body{
+    height:100%; margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Georgia', 'Iowan Old Style', serif;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .card{
+    width:100%; max-width:480px; background:var(--panel); border:1px solid var(--line);
+    border-radius:4px; padding:32px 28px; position:relative;
+  }
+  h1{
+    font-size:1.5rem; margin:0 0 4px; font-weight:400; letter-spacing:.2px;
+  }
+  .sub{ color:var(--muted); font-size:.9rem; margin:0 0 24px; font-family:Arial,sans-serif;}
+  .topic-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;}
+  .topic-btn{
+    font-family:Arial,sans-serif; background:transparent; color:var(--ink); border:1px solid var(--line);
+    padding:14px 10px; border-radius:3px; cursor:pointer; font-size:.85rem; text-align:left; transition:border-color .15s;
+  }
+  .topic-btn:hover{ border-color:var(--accent); }
+  .progress{ font-family:Arial,sans-serif; color:var(--muted); font-size:.8rem; margin-bottom:6px;}
+  .bar{ height:3px; background:var(--line); border-radius:2px; margin-bottom:24px; overflow:hidden;}
+  .bar-fill{ height:100%; background:var(--accent); transition:width .3s;}
+  .question{ font-size:1.15rem; line-height:1.5; margin-bottom:22px;}
+  .opt{
+    display:block; width:100%; text-align:left; font-family:Arial,sans-serif;
+    background:transparent; border:1px solid var(--line); color:var(--ink);
+    padding:12px 14px; border-radius:3px; margin-bottom:10px; cursor:pointer; font-size:.92rem;
+  }
+  .opt:hover{ border-color:var(--accent); }
+  .opt.correct{ border-color:var(--accent); background:rgba(92,200,166,.12); }
+  .opt.wrong{ border-color:var(--wrong); background:rgba(217,105,95,.12); }
+  .opt:disabled{ cursor:default; }
+  .feedback{ font-family:Arial,sans-serif; font-size:.85rem; color:var(--muted); min-height:20px; margin-bottom:10px;}
+  .next{
+    font-family:Arial,sans-serif; background:var(--accent); color:#0F1414; border:none;
+    padding:11px 20px; border-radius:3px; cursor:pointer; font-size:.9rem; font-weight:600;
+  }
+  .next:disabled{ opacity:.3; cursor:default; }
+  .score{ font-size:2.4rem; margin:6px 0 4px; color:var(--accent);}
+  .again{
+    font-family:Arial,sans-serif; background:transparent; color:var(--ink); border:1px solid var(--line);
+    padding:10px 18px; border-radius:3px; cursor:pointer; margin-top:18px;
+  }
+</style>
+</head>
+<body>
+<div class="card" id="card"></div>
+
+<script>
+const BANK = {
+  "Struktur Data": [
+    {q:"Struktur data apa yang bekerja dengan prinsip LIFO (Last In First Out)?", opts:["Queue","Stack","Array","Linked List"], a:1},
+    {q:"Apa nama proses menambahkan elemen ke dalam stack?", opts:["Dequeue","Pop","Push","Peek"], a:2},
+    {q:"Struktur data mana yang bekerja dengan prinsip FIFO?", opts:["Stack","Tree","Queue","Graph"], a:2},
+    {q:"Kompleksitas waktu pencarian pada binary search tree seimbang adalah?", opts:["O(n)","O(log n)","O(n^2)","O(1)"], a:1},
+  ],
+  "Kecerdasan Buatan": [
+    {q:"Teknik AI apa yang digunakan untuk memahami bahasa manusia?", opts:["Computer Vision","NLP","Genetic Algorithm","Fuzzy Logic"], a:1},
+    {q:"Algoritma pencarian yang mempertimbangkan biaya sekaligus estimasi jarak ke tujuan disebut?", opts:["BFS","DFS","A*","Greedy Best First"], a:2},
+    {q:"Apa fungsi utama fungsi aktivasi pada neural network?", opts:["Menyimpan data","Menambah non-linearitas","Mengurangi dataset","Mengganti bobot secara acak"], a:1},
+    {q:"Machine learning yang belajar dari data berlabel disebut?", opts:["Unsupervised Learning","Reinforcement Learning","Supervised Learning","Semi Learning"], a:2},
+  ],
+  "Basis Data": [
+    {q:"Perintah SQL untuk mengambil data dari tabel adalah?", opts:["INSERT","SELECT","UPDATE","DELETE"], a:1},
+    {q:"Normalisasi database bertujuan untuk?", opts:["Mempercepat query saja","Mengurangi redundansi data","Menambah jumlah tabel","Menghapus primary key"], a:1},
+    {q:"Kunci yang menghubungkan dua tabel disebut?", opts:["Primary Key","Foreign Key","Unique Key","Composite Key"], a:1},
+  ],
+  "Jaringan Komputer": [
+    {q:"Protokol apa yang digunakan untuk mengirim email?", opts:["HTTP","FTP","SMTP","SSH"], a:2},
+    {q:"Lapisan OSI yang bertanggung jawab atas routing adalah?", opts:["Data Link","Network","Transport","Session"], a:1},
+    {q:"IP address versi berapa yang menggunakan format 128-bit?", opts:["IPv4","IPv5","IPv6","IPv8"], a:2},
+  ],
+};
+
+let state = {topic:null, qs:[], idx:0, score:0, answered:false};
+const card = document.getElementById('card');
+
+function renderTopics(){
+  state = {topic:null, qs:[], idx:0, score:0, answered:false};
+  card.innerHTML = `
+    <h1>QuizBot</h1>
+    <p class="sub">Pilih topik untuk mulai latihan soal</p>
+    <div class="topic-grid">
+      ${Object.keys(BANK).map(t=>`<button class="topic-btn" data-t="${t}">${t}</button>`).join('')}
+    </div>
+  `;
+  card.querySelectorAll('.topic-btn').forEach(b=>{
+    b.onclick = ()=>startQuiz(b.dataset.t);
+  });
+}
+
+function startQuiz(topic){
+  state.topic = topic;
+  state.qs = [...BANK[topic]];
+  state.idx = 0;
+  state.score = 0;
+  renderQuestion();
+}
+
+function renderQuestion(){
+  state.answered = false;
+  const total = state.qs.length;
+  const q = state.qs[state.idx];
+  const pct = (state.idx/total)*100;
+  card.innerHTML = `
+    <div class="progress">${state.topic} · Soal ${state.idx+1} dari ${total}</div>
+    <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+    <div class="question">${q.q}</div>
+    <div id="opts">
+      ${q.opts.map((o,i)=>`<button class="opt" data-i="${i}">${o}</button>`).join('')}
+    </div>
+    <div class="feedback" id="fb"></div>
+    <button class="next" id="nextBtn" disabled>${state.idx+1===total ? 'Lihat Skor' : 'Soal Berikutnya'}</button>
+  `;
+  card.querySelectorAll('.opt').forEach(b=>{
+    b.onclick = ()=>selectAnswer(parseInt(b.dataset.i));
+  });
+  document.getElementById('nextBtn').onclick = ()=>{
+    if(state.idx+1===total){ renderScore(); } else { state.idx++; renderQuestion(); }
+  };
+}
+
+function selectAnswer(i){
+  if(state.answered) return;
+  state.answered = true;
+  const q = state.qs[state.idx];
+  const opts = card.querySelectorAll('.opt');
+  opts.forEach((b,idx)=>{
+    b.disabled = true;
+    if(idx===q.a) b.classList.add('correct');
+    else if(idx===i) b.classList.add('wrong');
+  });
+  const fb = document.getElementById('fb');
+  if(i===q.a){ state.score++; fb.textContent = 'Benar.'; }
+  else { fb.textContent = `Kurang tepat. Jawaban yang benar: ${q.opts[q.a]}`; }
+  document.getElementById('nextBtn').disabled = false;
+}
+
+function renderScore(){
+  const total = state.qs.length;
+  card.innerHTML = `
+    <p class="sub">${state.topic} — Selesai</p>
+    <div class="score">${state.score}/${total}</div>
+    <p class="sub">Skor kamu</p>
+    <button class="again" id="again">Coba Topik Lain</button>
+  `;
+  document.getElementById('again').onclick = renderTopics;
+}
+
+renderTopics();
+</script>
+</body>
+</html>

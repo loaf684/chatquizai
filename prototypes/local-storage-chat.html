@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QuizBot — Chatbot Latihan Soal</title>
+<style>
+  :root{
+    --bg:#0F1414; --panel:#171E1D; --bubble-bot:#1F2826; --bubble-user:#274038;
+    --ink:#EDEFEA; --muted:#8FA39B; --accent:#5CC8A6; --wrong:#D9695F; --line:#2A332F;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%; margin:0;}
+  body{
+    background:var(--bg); color:var(--ink); font-family:Georgia,'Iowan Old Style',serif;
+    display:flex; justify-content:center; padding:20px;
+  }
+  .app{ width:100%; max-width:520px; display:flex; flex-direction:column; height:100%; max-height:820px; }
+  header{ padding:0 4px 14px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+  header h1{ font-size:1.3rem; font-weight:400; margin:0 0 2px; }
+  header p{ font-family:Arial,sans-serif; color:var(--muted); font-size:.8rem; margin:0; }
+  .chat{ flex:1; overflow-y:auto; padding:4px 2px; display:flex; flex-direction:column; gap:10px; }
+  .row{ display:flex; }
+  .row.bot{ justify-content:flex-start; }
+  .row.user{ justify-content:flex-end; }
+  .bubble{ max-width:82%; padding:11px 14px; border-radius:12px; font-size:.95rem; line-height:1.45; font-family:Arial,sans-serif; }
+  .bot .bubble{ background:var(--bubble-bot); border-top-left-radius:3px; }
+  .user .bubble{ background:var(--bubble-user); border-top-right-radius:3px; }
+  .opts{ display:flex; flex-direction:column; gap:8px; margin-top:2px; }
+  .opt{
+    font-family:Arial,sans-serif; text-align:left; background:transparent; color:var(--ink);
+    border:1px solid var(--line); padding:10px 13px; border-radius:8px; cursor:pointer; font-size:.9rem;
+  }
+  .opt:hover{ border-color:var(--accent); }
+  .opt:disabled{ cursor:default; }
+  .opt.correct{ border-color:var(--accent); background:rgba(92,200,166,.12); }
+  .opt.wrong{ border-color:var(--wrong); background:rgba(217,105,95,.12); }
+  .topic-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:2px; }
+  .topic-btn{
+    font-family:Arial,sans-serif; background:transparent; color:var(--ink); border:1px solid var(--line);
+    padding:12px 10px; border-radius:8px; cursor:pointer; font-size:.85rem; text-align:left;
+  }
+  .topic-btn:hover{ border-color:var(--accent); }
+  .stat-line{ font-family:Arial,sans-serif; font-size:.8rem; color:var(--muted); margin-top:2px; }
+  .bar{ height:3px; background:var(--line); border-radius:2px; margin:4px 0 2px; overflow:hidden; width:140px; }
+  .bar-fill{ height:100%; background:var(--accent); transition:width .3s; }
+  footer{ padding-top:10px; }
+  .action-btn{
+    font-family:Arial,sans-serif; background:var(--accent); color:#0F1414; border:none;
+    padding:10px 16px; border-radius:8px; cursor:pointer; font-size:.85rem; font-weight:600; margin-right:8px;
+  }
+  .action-btn.ghost{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+  ::-webkit-scrollbar{ width:6px; }
+  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>QuizBot</h1>
+    <p>Chatbot latihan soal dan kuis otomatis</p>
+  </header>
+  <div class="chat" id="chat"></div>
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const BANK = {
+  "Struktur Data": [
+    {q:"Struktur data apa yang bekerja dengan prinsip LIFO?", opts:["Queue","Stack","Array","Linked List"], a:1},
+    {q:"Apa nama proses menambahkan elemen ke dalam stack?", opts:["Dequeue","Pop","Push","Peek"], a:2},
+    {q:"Struktur data mana yang bekerja dengan prinsip FIFO?", opts:["Stack","Tree","Queue","Graph"], a:2},
+    {q:"Kompleksitas waktu pencarian pada binary search tree seimbang adalah?", opts:["O(n)","O(log n)","O(n^2)","O(1)"], a:1},
+    {q:"Struktur data yang cocok untuk merepresentasikan hierarki adalah?", opts:["Array","Stack","Tree","Queue"], a:2},
+    {q:"Operasi 'peek' pada stack berfungsi untuk?", opts:["Menghapus elemen teratas","Melihat elemen teratas tanpa menghapus","Menambah elemen","Mengosongkan stack"], a:1},
+  ],
+  "Kecerdasan Buatan": [
+    {q:"Teknik AI apa yang digunakan untuk memahami bahasa manusia?", opts:["Computer Vision","NLP","Genetic Algorithm","Fuzzy Logic"], a:1},
+    {q:"Algoritma yang mempertimbangkan biaya sekaligus estimasi jarak ke tujuan disebut?", opts:["BFS","DFS","A*","Greedy Best First"], a:2},
+    {q:"Apa fungsi utama fungsi aktivasi pada neural network?", opts:["Menyimpan data","Menambah non-linearitas","Mengurangi dataset","Mengganti bobot acak"], a:1},
+    {q:"Machine learning yang belajar dari data berlabel disebut?", opts:["Unsupervised Learning","Reinforcement Learning","Supervised Learning","Semi Learning"], a:2},
+    {q:"Teknik untuk mengevaluasi kemiripan makna dua kalimat disebut?", opts:["Tokenization","Semantic Similarity","Stemming","Parsing"], a:1},
+    {q:"Model bahasa berskala besar yang dilatih untuk memahami dan menghasilkan teks disebut?", opts:["CNN","LLM","KNN","SVM"], a:1},
+  ],
+  "Basis Data": [
+    {q:"Perintah SQL untuk mengambil data dari tabel adalah?", opts:["INSERT","SELECT","UPDATE","DELETE"], a:1},
+    {q:"Normalisasi database bertujuan untuk?", opts:["Mempercepat query saja","Mengurangi redundansi data","Menambah jumlah tabel","Menghapus primary key"], a:1},
+    {q:"Kunci yang menghubungkan dua tabel disebut?", opts:["Primary Key","Foreign Key","Unique Key","Composite Key"], a:1},
+    {q:"Perintah untuk menghapus baris data pada tabel adalah?", opts:["DROP","DELETE","REMOVE","TRUNCATE TABLE"], a:1},
+    {q:"Bentuk normal yang menghilangkan ketergantungan parsial disebut?", opts:["1NF","2NF","3NF","BCNF"], a:1},
+  ],
+  "Jaringan Komputer": [
+    {q:"Protokol apa yang digunakan untuk mengirim email?", opts:["HTTP","FTP","SMTP","SSH"], a:2},
+    {q:"Lapisan OSI yang bertanggung jawab atas routing adalah?", opts:["Data Link","Network","Transport","Session"], a:1},
+    {q:"IP address versi berapa yang menggunakan format 128-bit?", opts:["IPv4","IPv5","IPv6","IPv8"], a:2},
+    {q:"Perangkat yang menghubungkan beberapa jaringan berbeda disebut?", opts:["Switch","Hub","Router","Repeater"], a:2},
+  ],
+};
+
+const chat = document.getElementById('chat');
+const footer = document.getElementById('footer');
+let state = {};
+
+function addBot(html){
+  const row = document.createElement('div');
+  row.className = 'row bot';
+  row.innerHTML = `<div class="bubble">${html}</div>`;
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+  return row.querySelector('.bubble');
+}
+function addUser(text){
+  const row = document.createElement('div');
+  row.className = 'row user';
+  row.innerHTML = `<div class="bubble">${text}</div>`;
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function getHistory(){
+  try{ return JSON.parse(localStorage.getItem('quizbot_history')||'{}'); }catch(e){ return {}; }
+}
+function saveHistory(topic, score, total){
+  try{
+    const h = getHistory();
+    if(!h[topic]) h[topic] = [];
+    h[topic].push({score, total, t: Date.now()});
+    localStorage.setItem('quizbot_history', JSON.stringify(h));
+  }catch(e){}
+}
+function weakestTopic(){
+  const h = getHistory();
+  let worst=null, worstPct=1.01;
+  Object.keys(h).forEach(t=>{
+    const arr=h[t]; const s=arr.reduce((a,b)=>a+b.score,0); const tt=arr.reduce((a,b)=>a+b.total,0);
+    const pct = tt? s/tt : 1;
+    if(pct<worstPct){ worstPct=pct; worst=t; }
+  });
+  return worst;
+}
+
+function start(){
+  chat.innerHTML=''; footer.innerHTML='';
+  const h = getHistory();
+  const hasHistory = Object.keys(h).length>0;
+  let msg = "Halo! Aku QuizBot, siap membantu kamu latihan soal. Pilih topik yang mau kamu latih ya.";
+  if(hasHistory){
+    const weak = weakestTopic();
+    if(weak) msg += ` Berdasarkan riwayatmu, topik <b>${weak}</b> masih perlu banyak latihan.`;
+  }
+  const b = addBot(msg);
+  const grid = document.createElement('div');
+  grid.className='topic-grid';
+  Object.keys(BANK).forEach(t=>{
+    const btn=document.createElement('button');
+    btn.className='topic-btn'; btn.textContent=t;
+    btn.onclick=()=>{ addUser(t); pickTopic(t); };
+    grid.appendChild(btn);
+  });
+  b.appendChild(grid);
+  if(hasHistory){
+    footer.innerHTML = `<button class="action-btn ghost" id="histBtn">Lihat Riwayat</button>`;
+    document.getElementById('histBtn').onclick = showHistory;
+  }
+}
+
+function showHistory(){
+  const h = getHistory();
+  let lines = Object.keys(h).map(t=>{
+    const arr=h[t]; const last=arr[arr.length-1];
+    return `<div class="stat-line">${t}: ${last.score}/${last.total} (percobaan terakhir)</div>`;
+  }).join('');
+  addUser('Lihat riwayat');
+  addBot(`Ini riwayat latihanmu:${lines}`);
+}
+
+function pickTopic(topic){
+  const qs = [...BANK[topic]].sort(()=>Math.random()-0.5).slice(0,5);
+  state = {topic, qs, idx:0, score:0};
+  footer.innerHTML='';
+  addBot(`Oke, kita mulai latihan topik <b>${topic}</b>. Ada ${qs.length} soal, semangat!`);
+  setTimeout(askQuestion, 300);
+}
+
+function askQuestion(){
+  const {qs, idx} = state;
+  const q = qs[idx];
+  const b = addBot(`Soal ${idx+1}/${qs.length}: ${q.q}`);
+  const wrap = document.createElement('div');
+  wrap.className='opts';
+  q.opts.forEach((o,i)=>{
+    const btn=document.createElement('button');
+    btn.className='opt'; btn.textContent=o;
+    btn.onclick=()=>answer(i, wrap);
+    wrap.appendChild(btn);
+  });
+  b.appendChild(wrap);
+}
+
+function answer(i, wrap){
+  const {qs, idx} = state;
+  const q = qs[idx];
+  addUser(q.opts[i]);
+  [...wrap.children].forEach((btn,bi)=>{
+    btn.disabled=true;
+    if(bi===q.a) btn.classList.add('correct');
+    else if(bi===i) btn.classList.add('wrong');
+  });
+  const correct = i===q.a;
+  if(correct) state.score++;
+  setTimeout(()=>{
+    addBot(correct ? "Benar!" : `Kurang tepat, jawaban yang benar: <b>${q.opts[q.a]}</b>`);
+    state.idx++;
+    setTimeout(()=>{
+      if(state.idx < qs.length) askQuestion();
+      else finish();
+    }, 500);
+  }, 300);
+}
+
+function finish(){
+  const {topic, score, qs} = state;
+  saveHistory(topic, score, qs.length);
+  const pct = Math.round((score/qs.length)*100);
+  let comment = pct>=80 ? "Mantap, pemahamanmu di topik ini sudah bagus!" :
+                pct>=50 ? "Lumayan, tapi masih ada beberapa yang perlu dipelajari lagi." :
+                "Topik ini sepertinya masih perlu banyak latihan, jangan menyerah!";
+  addBot(`Selesai! Skormu <b>${score}/${qs.length}</b> (${pct}%). ${comment}`);
+  footer.innerHTML = `
+    <button class="action-btn" id="retryBtn">Coba Topik Lain</button>
+    <button class="action-btn ghost" id="againBtn">Ulangi Topik Ini</button>
+  `;
+  document.getElementById('retryBtn').onclick = start;
+  document.getElementById('againBtn').onclick = ()=>pickTopic(topic);
+}
+
+start();
+</script>
+</body>
+</html>
