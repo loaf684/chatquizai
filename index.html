@@ -152,8 +152,6 @@ const progressLabel = document.getElementById('progressLabel');
 const scoreLabel = document.getElementById('scoreLabel');
 const progressTrack = document.querySelector('.progress-track');
 const progressFill = document.getElementById('progressFill');
-let aiAvailable = false;
-let setupError = '';
 let requestingQuestions = false;
 let historyShown = false;
 let retryCooldownTimer = null;
@@ -327,20 +325,6 @@ function retryButton(topic, settings, retryAfter = 0){
   }
 }
 
-async function init(){
-  try{
-    const response = await fetch('/api/health');
-    const health = await response.json();
-    if(!response.ok) throw new Error(health.error || 'Server tidak tersedia.');
-    if(!health.configured) throw new Error(health.setupMessage || 'GEMINI_API_KEY belum diatur.');
-    aiAvailable = true;
-  }catch(error){
-    aiAvailable = false;
-    setupError = error.message;
-  }
-  start();
-}
-
 function start(){
   if(retryCooldownTimer){
     clearInterval(retryCooldownTimer);
@@ -412,12 +396,6 @@ function showHistory(){
 async function pickTopic(topic, options = quizSettings()){
   if(requestingQuestions) return;
   footer.innerHTML='';
-  if(!aiAvailable){
-    addBot(`<span class="error-note">Layanan AI belum tersedia:</span> ${escapeHtml(setupError || 'Periksa koneksi server dan pengaturan API.')}`);
-    footer.innerHTML = `<button class="action-btn ghost" id="backBtn">Kembali</button>`;
-    document.getElementById('backBtn').onclick = start;
-    return;
-  }
   requestingQuestions = true;
   setTopicControlsDisabled(true);
   state = {topic, count:options.count, difficulty:options.difficulty};
@@ -507,20 +485,18 @@ async function finish(){
   document.getElementById('retryBtn').onclick = start;
   document.getElementById('againBtn').onclick = ()=>pickTopic(topic);
 
-  if(aiAvailable){
-    const typingRow = addTyping("QuizBot sedang menyiapkan tips belajar...");
-    try{
-      const result = await apiRequest('/api/tip', {topic, score, total:qs.length});
-      typingRow.remove();
-      addBot(`<span class="feedback-title">Tips belajar</span><br>${escapeHtml(result.tip)}`);
-    }catch(error){
-      typingRow.remove();
-      addBot(`Skormu tetap tersimpan. Tips belajar belum tersedia: ${escapeHtml(error.message)}`);
-    }
+  const typingRow = addTyping("QuizBot sedang menyiapkan tips belajar...");
+  try{
+    const result = await apiRequest('/api/tip', {topic, score, total:qs.length});
+    typingRow.remove();
+    addBot(`<span class="feedback-title">Tips belajar</span><br>${escapeHtml(result.tip)}`);
+  }catch(error){
+    typingRow.remove();
+    addBot(`Skormu tetap tersimpan. Tips belajar belum tersedia: ${escapeHtml(error.message)}`);
   }
 }
 
-init();
+start();
 </script>
 </body>
 </html>
