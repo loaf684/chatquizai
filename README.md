@@ -6,7 +6,7 @@ QuizBot generates Indonesian multiple-choice quizzes and study tips with the Gem
 
 1. Import `https://github.com/loaf684/chatquizai` as a project in Vercel.
 2. In **Project Settings → Environment Variables**, add `GEMINI_API_KEY` with a key from Google AI Studio. Do not commit the key or put it in browser code.
-3. Optionally add `GEMINI_MODEL` (defaults to `gemini-3.5-flash-lite`).
+3. Optionally add `GEMINI_MODEL` (defaults to `gemini-3.8-flash`).
 4. Deploy or redeploy the project.
 
 The production frontend is `index.html`, and Vercel serves the `/api` directory as serverless functions. `scripts/dev-server.js` runs the same app locally; older standalone demos are kept in `prototypes/`.
